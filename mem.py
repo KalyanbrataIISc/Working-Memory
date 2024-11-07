@@ -3,12 +3,13 @@ import sys
 import random
 import csv
 import time
+from words import words  # Ensure you have a 'words.py' file with a 'words' list
 
 # Initialize Pygame
 pygame.init()
 
 # Set up the window
-window_width, window_height = 800, 600
+window_width, window_height = 1280, 800  # Increased window size
 screen = pygame.display.set_mode((window_width, window_height))
 pygame.display.set_caption("Working Memory Experiment")
 clock = pygame.time.Clock()
@@ -22,40 +23,22 @@ timer_font = pygame.font.SysFont(None, 24)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GRAY = (128, 128, 128)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
 
 # Experiment parameters
-set_sizes = [5, 10, 15, 20, 25, 30, 35]  # Updated set sizes with 30 and 35 added
-random.shuffle(set_sizes)  # Randomize the order of set sizes for presentation
-all_words = [
-    "apple", "grape", "cloud", "light", "stone", "tiger", "river", "chair", "plaza", "brush",
-    "scale", "hotel", "train", "plane", "forest", "liver", "stone", "creek", "park", "stage",
-    "movie", "house", "plane", "bottle", "vigor", "shade", "smile", "watch", "piano", "lemon",
-    "daisy", "guitar", "shelf", "bread", "catch", "leaf", "purse", "track", "guide", "pearl",
-    "lunar", "pencil", "track", "mango", "swipe", "candy", "cookie", "juice", "moss", "path",
-    "shine", "laser", "cherry", "liver", "grape", "beach", "grape", "horse", "stone", "stove",
-    "glove", "flame", "kick", "bounce", "clash", "smoke", "shout", "baker", "sugar", "board",
-    "knock", "flood", "stone", "shaky", "carve", "clamp", "boil", "glory", "vivid", "flask",
-    "mint", "smile", "dash", "pride", "frill", "habit", "tight", "scarf", "shirt", "glove",
-    "whale", "plane", "leaf", "tiger", "storm", "swoop", "brave", "lucky", "chat", "dice",
-    "vibe", "meat", "love", "hop", "ice", "plane", "shelf", "dog", "elephant", "fish", "lake",
-    "dart", "task", "lucky", "clean", "rush", "lane", "golf", "nail", "hat", "cat", "box",
-    "puff", "fridge", "cloud", "trick", "brink", "joke", "quiz", "mist", "tail", "tide", "star",
-    "bell", "feel", "muse", "clue", "gale", "sort", "slam", "push", "flip", "glide", "plug",
-    "bead", "page", "lock", "star", "scrap", "pipe", "tart", "flip", "space", "tool", "edge",
-    "slot", "clay", "trap", "chop", "fair", "spin", "spool", "skirt", "tear", "bead", "tale",
-    "flop", "bake", "hole", "tail", "loft", "trim", "bike", "slip", "trip", "rock", "swoop",
-    "gleam", "rest", "dash", "bike", "golf", "cast", "coil", "straw", "fluff", "maze", "trim",
-    "whip", "rays", "glow", "rose", "trap", "task", "zone", "rays", "pace", "flock", "task",
-    "wild", "peep", "drip", "wood", "flip", "tape", "quick", "rain", "mice", "zoom", "slam",
-    "rock", "turn", "brim", "dear", "glow", "spoon", "tail", "fire", "stamp", "goal", "tune",
-    "good", "race", "rich", "clay", "wind", "loud", "path", "dear", "page", "trip", "lace",
-    "soft", "flip", "loud", "duck", "rim", "frost", "test", "crisp", "lamp", "back", "bark",
-    "race", "trap", "flap", "lock", "spin", "tip", "cloud", "blow", "coin", "speed", "race",
-    "shine", "loud", "jack", "task", "palm", "fish", "star", "hint", "shout", "snip", "pass",
-    "dream", "pull", "jump", "race", "step", "time", "tune", "mix", "bell", "shout", "drain"
-]  # Further expanded word list for larger sets
+set_sizes = [5, 10, 15, 20, 25, 30, 35]  # Set sizes
+trials = []
+for set_size in set_sizes:
+    trials.extend([set_size]*3)  # 3 trials per set size
+random.shuffle(trials)  # Randomize the order of trials
+
+all_words = words  # Ensure you have enough unique words in 'words.py'
 
 data = []
+
+total_trials = len(trials)
+current_trial_number = 0  # Will be updated during the experiment
 
 # Button class
 class Button:
@@ -63,9 +46,13 @@ class Button:
         self.rect = pygame.Rect(x, y, w, h)
         self.text = text
         self.color = GRAY
+        self.highlighted = False
 
     def draw(self):
-        pygame.draw.rect(screen, self.color, self.rect)
+        if self.highlighted:
+            pygame.draw.rect(screen, GREEN, self.rect)  # Highlighted color
+        else:
+            pygame.draw.rect(screen, self.color, self.rect)
         text_surf = word_font.render(self.text, True, BLACK)
         text_rect = text_surf.get_rect(center=self.rect.center)
         screen.blit(text_surf, text_rect)
@@ -73,29 +60,49 @@ class Button:
     def is_clicked(self, pos):
         return self.rect.collidepoint(pos)
 
+# Function to draw the progress bar
+def draw_progress_bar(current_trial, total_trials):
+    progress_bar_width = window_width - 40  # Leave some padding
+    progress_bar_height = 20
+    progress = current_trial / total_trials
+    filled_width = int(progress_bar_width * progress)
+
+    # Outline of the progress bar
+    pygame.draw.rect(screen, BLACK, (20, 20, progress_bar_width, progress_bar_height), 2)
+    # Filled part of the progress bar
+    pygame.draw.rect(screen, BLUE, (22, 22, filled_width, progress_bar_height - 4))
+
+    # Progress text
+    progress_text = timer_font.render(f"Trial {current_trial} of {total_trials}", True, BLACK)
+    progress_rect = progress_text.get_rect(center=(window_width / 2, 50))
+    screen.blit(progress_text, progress_rect)
+
 # Main experiment function
 def run_experiment():
-    used_words = set()
-    for set_size in set_sizes:
-        # Ensure no common words between sets by using the difference between all_words and used_words
-        available_words = list(set(all_words) - used_words)
-        trial_words = random.sample(available_words, set_size)
-        used_words.update(trial_words)
+    global current_trial_number
+    trial_number = 1
+    for set_size in trials:
+        current_trial_number += 1
+        trial_words = random.sample(all_words, set_size)
         display_fixation()
         display_words(trial_words, set_size)
-        
-        # Generate test words: 5 from set and 5 from outside the set
-        test_words = random.sample(trial_words, 5) + random.sample(list(set(all_words) - set(trial_words)), 5)
-        random.shuffle(test_words)  # Randomize the order of test words
 
-        # Ask multiple questions per set size
+        # Generate 5 target and 5 lure test words
+        target_test_words = random.sample(trial_words, min(5, len(trial_words)))
+        lure_test_words = random.sample(list(set(all_words) - set(trial_words)), 5)
+        test_words = target_test_words + lure_test_words
+        random.shuffle(test_words)
+
+        test_number = 1
         for test_word in test_words:
             is_target = test_word in trial_words
             display_test_word(test_word)
-            response, response_time = collect_response()
+            response, response_time = collect_response(test_word)
             correct = (response == "Yes" and is_target) or (response == "No" and not is_target)
             timestamp = time.time()
             trial_data = {
+                "Trial Number": trial_number,
+                "Test Number": test_number,
                 "Set Size": set_size,
                 "Words Displayed": trial_words,
                 "Test Word": test_word,
@@ -106,7 +113,10 @@ def run_experiment():
                 "Response Time": response_time
             }
             data.append(trial_data)
-        pygame.time.delay(500)  # Small delay between set sizes
+            test_number += 1
+            pygame.time.delay(500)  # Small delay between questions
+        trial_number += 1
+        pygame.time.delay(500)  # Small delay between trials
 
     # Save data to CSV
     save_data()
@@ -117,6 +127,8 @@ def display_fixation():
     fixation_text = fixation_font.render("+", True, BLACK)
     fixation_rect = fixation_text.get_rect(center=(window_width/2, window_height/2))
     screen.blit(fixation_text, fixation_rect)
+    # Draw progress bar
+    draw_progress_bar(current_trial_number, total_trials)
     pygame.display.flip()
     pygame.time.delay(1000)  # Display for 1 second
 
@@ -135,7 +147,7 @@ def display_words(words, set_size):
         # Timer
         time_left = display_time - (pygame.time.get_ticks() - start_time)
         timer_text = timer_font.render(f"Time Left: {int(time_left/1000) + 1}s", True, GRAY)
-        screen.blit(timer_text, (window_width - 150, 10))
+        screen.blit(timer_text, (10, window_height - 30))
 
         # Display words
         for i, word in enumerate(words):
@@ -143,19 +155,48 @@ def display_words(words, set_size):
             word_rect = word_text.get_rect(center=positions[i])
             screen.blit(word_text, word_rect)
 
+        # Draw progress bar
+        draw_progress_bar(current_trial_number, total_trials)
+
         pygame.display.flip()
         clock.tick(60)
 
 # Generate random positions for words
 def generate_positions(num_words):
     positions = []
-    exclusion_zone = pygame.Rect(window_width/2 - 50, window_height/2 - 50, 100, 100)
-    while len(positions) < num_words:
-        x = random.randint(50, window_width - 50)
-        y = random.randint(50, window_height - 100)
-        new_rect = pygame.Rect(x - 50, y - 15, 100, 30)
-        if not new_rect.colliderect(exclusion_zone) and all(not new_rect.colliderect(pygame.Rect(pos[0] - 50, pos[1] - 15, 100, 30)) for pos in positions):
-            positions.append((x, y))
+    # Define the available area (exclude progress bar and timer area)
+    top_margin = 80  # Leave space for progress bar and timer
+    bottom_margin = 100  # Leave space for buttons
+    left_margin = 20
+    right_margin = 20
+    available_width = window_width - left_margin - right_margin
+    available_height = window_height - top_margin - bottom_margin
+
+    # Calculate the grid size based on the number of words
+    grid_columns = int(num_words ** 0.5)
+    grid_rows = (num_words + grid_columns - 1) // grid_columns
+    cell_width = available_width / grid_columns
+    cell_height = available_height / grid_rows
+
+    # Create a list of all possible cell centers
+    cell_centers = []
+    for row in range(grid_rows):
+        for col in range(grid_columns):
+            x = left_margin + cell_width * (col + 0.5)
+            y = top_margin + cell_height * (row + 0.5)
+            cell_centers.append((x, y))
+
+    # Randomly select positions from the cell centers
+    random.shuffle(cell_centers)
+    positions = cell_centers[:num_words]
+
+    # Add slight random offsets to each position
+    for i in range(len(positions)):
+        x, y = positions[i]
+        offset_x = random.uniform(-cell_width / 4, cell_width / 4)
+        offset_y = random.uniform(-cell_height / 4, cell_height / 4)
+        positions[i] = (x + offset_x, y + offset_y)
+
     return positions
 
 # Display test word
@@ -164,10 +205,12 @@ def display_test_word(test_word):
     word_text = word_font.render(test_word, True, BLACK)
     word_rect = word_text.get_rect(center=(window_width/2, window_height/2 - 50))
     screen.blit(word_text, word_rect)
+    # Draw progress bar
+    draw_progress_bar(current_trial_number, total_trials)
     pygame.display.flip()
 
 # Collect response
-def collect_response():
+def collect_response(test_word):
     yes_button = Button(window_width/2 - 100, window_height/2 + 50, 80, 40, "Yes")
     no_button = Button(window_width/2 + 20, window_height/2 + 50, 80, 40, "No")
     start_time = time.time()
@@ -179,21 +222,48 @@ def collect_response():
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if yes_button.is_clicked(event.pos):
+                    yes_button.highlighted = True
                     response = "Yes"
-                if no_button.is_clicked(event.pos):
+                elif no_button.is_clicked(event.pos):
+                    no_button.highlighted = True
                     response = "No"
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    yes_button.highlighted = True
+                    response = "Yes"
+                elif event.key == pygame.K_RIGHT:
+                    no_button.highlighted = True
+                    response = "No"
+
+        screen.fill(WHITE)
+        # Redraw test word
+        word_text = word_font.render(test_word, True, BLACK)
+        word_rect = word_text.get_rect(center=(window_width/2, window_height/2 - 50))
+        screen.blit(word_text, word_rect)
 
         yes_button.draw()
         no_button.draw()
+
+        # Draw progress bar
+        draw_progress_bar(current_trial_number, total_trials)
+
         pygame.display.flip()
         clock.tick(60)
+
     response_time = time.time() - start_time
+    # Show the highlighted button for confirmation
+    pygame.display.flip()
+    pygame.time.delay(200)
+
+    # Reset highlights
+    yes_button.highlighted = False
+    no_button.highlighted = False
     return response, response_time
 
 # Save data to CSV
 def save_data():
     with open('experiment_data.csv', mode='w', newline='') as file:
-        fieldnames = ["Set Size", "Words Displayed", "Test Word", "Is Target",
+        fieldnames = ["Trial Number", "Test Number", "Set Size", "Words Displayed", "Test Word", "Is Target",
                       "Participant Response", "Correct", "Timestamp", "Response Time"]
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
@@ -209,18 +279,19 @@ def show_instructions():
         "",
         "You will be shown a set of words displayed randomly on the screen.",
         "Try to remember as many words as you can.",
-        "After a short delay, a test word will appear.",
+        "After the words disappear, you will be shown a series of test words.",
         "Press 'Yes' if you saw the word earlier, 'No' if you did not.",
+        "You can use the left arrow key for 'Yes' and the right arrow key for 'No'.",
         "",
         "Press any key to start the experiment."
     ]
     screen.fill(WHITE)
-    y_offset = 100
+    y_offset = 50
     for line in instructions:
         instruction_text = word_font.render(line, True, BLACK)
         instruction_rect = instruction_text.get_rect(center=(window_width/2, y_offset))
         screen.blit(instruction_text, instruction_rect)
-        y_offset += 40
+        y_offset += 30
     pygame.display.flip()
     wait_for_keypress()
 
